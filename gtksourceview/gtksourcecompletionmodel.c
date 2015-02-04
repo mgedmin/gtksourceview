@@ -520,8 +520,8 @@ tree_model_get_value (GtkTreeModel *tree_model,
 			}
 			break;
 
-		case GTK_SOURCE_COMPLETION_MODEL_COLUMN_IS_HEADER:
-			g_value_set_boolean (value, is_header (proposal_info));
+		case GTK_SOURCE_COMPLETION_MODEL_COLUMN_IS_PROPOSAL:
+			g_value_set_boolean (value, !is_header (proposal_info));
 			break;
 
 		default:
@@ -726,7 +726,7 @@ gtk_source_completion_model_init (GtkSourceCompletionModel *self)
 	self->priv->column_types[GTK_SOURCE_COMPLETION_MODEL_COLUMN_ICON] = GDK_TYPE_PIXBUF;
 	self->priv->column_types[GTK_SOURCE_COMPLETION_MODEL_COLUMN_PROPOSAL] = G_TYPE_OBJECT;
 	self->priv->column_types[GTK_SOURCE_COMPLETION_MODEL_COLUMN_PROVIDER] = G_TYPE_OBJECT;
-	self->priv->column_types[GTK_SOURCE_COMPLETION_MODEL_COLUMN_IS_HEADER] = G_TYPE_BOOLEAN;
+	self->priv->column_types[GTK_SOURCE_COMPLETION_MODEL_COLUMN_IS_PROPOSAL] = G_TYPE_BOOLEAN;
 
 	self->priv->show_headers = 1;
 	self->priv->providers = NULL;
