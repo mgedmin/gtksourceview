@@ -106,7 +106,7 @@ typedef struct
 	 * correctly from the same CSS provider. If someone can determine
 	 * the cause of this, we should merge them into a single provider.
 	 */
-	GtkCssProvider *view_css_provider;
+	GtkCssProvider *css_provider;
 
 	/*
 	 * This is our minimap widget. We adjust the font to be a 1pt font
@@ -150,6 +150,7 @@ update_scrubber_position (GtkSourceMap *map)
 	GdkRectangle visible_area;
 	GdkRectangle loc;
 	GtkAllocation our_alloc;
+        GdkRectangle old_pos;
 	gint child_height;
 	gint view_height;
 
@@ -159,6 +160,8 @@ update_scrubber_position (GtkSourceMap *map)
 	{
 		return;
 	}
+
+	old_pos = priv->scrubber_area;
 
 	gtk_widget_get_preferred_height (GTK_WIDGET (priv->view),
 	                                 NULL, &view_height);
@@ -182,6 +185,9 @@ update_scrubber_position (GtkSourceMap *map)
 	                                       GTK_TEXT_WINDOW_WIDGET,
 	                                       loc.x, loc.y,
 	                                       NULL, &priv->scrubber_area.y);
+
+	if (memcmp (&old_pos, &priv->scrubber_area, sizeof old_pos) != 0)
+		gtk_widget_queue_draw (GTK_WIDGET (map));
 }
 
 static void
@@ -219,7 +225,7 @@ gtk_source_map_rebuild_css (GtkSourceMap *map)
 	{
 		gchar *background = NULL;
 		GtkSourceStyle *style;
-		gboolean change_alpha;
+		gboolean change_alpha = FALSE;
 
 		style = gtk_source_style_scheme_get_style (style_scheme, "map-overlay");
 		if (style == NULL)
@@ -278,7 +284,7 @@ gtk_source_map_rebuild_css (GtkSourceMap *map)
 
 	if (gstr->len > 0)
 	{
-		gtk_css_provider_load_from_data (priv->view_css_provider,
+		gtk_css_provider_load_from_data (priv->css_provider,
 		                                 gstr->str, gstr->len, NULL);
 g_print ("%s\n", gstr->str);
 	}
@@ -662,7 +668,7 @@ gtk_source_map_destroy (GtkWidget *widget)
 
 	priv = gtk_source_map_get_instance_private (map);
 
-	g_clear_object (&priv->view_css_provider);
+	g_clear_object (&priv->css_provider);
 	g_clear_pointer (&priv->font_desc, pango_font_description_free);
 
 	if (priv->view != NULL)
@@ -685,19 +691,15 @@ gtk_source_map_draw (GtkWidget *widget,
 
 	priv = gtk_source_map_get_instance_private (map);
 
-	GTK_WIDGET_CLASS (gtk_source_map_parent_class)->draw (widget, cr);
+	if (GTK_WIDGET_CLASS (gtk_source_map_parent_class)->draw (widget, cr))
+	{
+		return TRUE;
+	}
 
 	style_context = gtk_widget_get_style_context (widget);
 
 	gtk_style_context_save (style_context);
 	gtk_style_context_add_class (style_context, "scrubber");
-if (0) {
-  GdkRGBA rgba;
-  gdk_rgba_parse (&rgba, "#729fcf");
-  gdk_cairo_set_source_rgba (cr, &rgba);
-  gdk_cairo_rectangle (cr, &priv->scrubber_area);
-  cairo_fill (cr);
-}
 	gtk_render_background (style_context, cr,
 	                       priv->scrubber_area.x, priv->scrubber_area.y,
 	                       priv->scrubber_area.width, priv->scrubber_area.height);
@@ -831,14 +833,14 @@ gtk_source_map_init (GtkSourceMap *map)
 	                         map,
 	                         G_CONNECT_SWAPPED | G_CONNECT_AFTER);
 
-	priv->view_css_provider = gtk_css_provider_new ();
+	priv->css_provider = gtk_css_provider_new ();
 	context = gtk_widget_get_style_context (GTK_WIDGET (map));
 	gtk_style_context_add_provider (context,
-	                                GTK_STYLE_PROVIDER (priv->view_css_provider),
+	                                GTK_STYLE_PROVIDER (priv->css_provider),
 	                                GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 	context = gtk_widget_get_style_context (GTK_WIDGET (priv->child_view));
 	gtk_style_context_add_provider (context,
-	                                GTK_STYLE_PROVIDER (priv->view_css_provider),
+	                                GTK_STYLE_PROVIDER (priv->css_provider),
 	                                GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
 	gtk_container_add (GTK_CONTAINER (map), GTK_WIDGET (priv->child_view));
 
