@@ -191,12 +191,12 @@ update_scrubber_position (GtkSourceMap *map)
 	GtkTextIter iter;
 	GdkRectangle visible_area;
 	GdkRectangle iter_area;
-        GdkRectangle scrubber_area;
+	GdkRectangle scrubber_area;
 	GtkAllocation alloc;
 	GtkAllocation view_alloc;
 	gint child_height;
 	gint view_height;
-        gint y;
+	gint y;
 
 	priv = gtk_source_map_get_instance_private (map);
 
@@ -455,10 +455,10 @@ connect_buffer (GtkSourceMap  *map,
 
 	priv->buffer_notify_style_scheme_handler =
 		g_signal_connect_object (buffer,
-			                 "notify::style-scheme",
-			                 G_CALLBACK (buffer_notify_style_scheme),
-			                 map,
-			                 G_CONNECT_SWAPPED);
+		                         "notify::style-scheme",
+		                         G_CALLBACK (buffer_notify_style_scheme),
+		                         map,
+		                         G_CONNECT_SWAPPED);
 
 	buffer_notify_style_scheme (map, NULL, buffer);
 }
@@ -720,7 +720,7 @@ child_view_motion_notify_event (GtkSourceMap   *map,
 		gtk_text_buffer_get_end_iter (buffer, &iter);
 		gtk_text_view_get_iter_location (GTK_TEXT_VIEW (child_view), &iter, &area);
 
-                yratio = CLAMP (event->y - alloc.y, 0, alloc.height) / (gdouble)alloc.height;
+		yratio = CLAMP (event->y - alloc.y, 0, alloc.height) / (gdouble)alloc.height;
 
 		point.x = 0;
 		point.y = (area.y + area.height) * yratio;
