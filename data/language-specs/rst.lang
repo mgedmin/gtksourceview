@@ -99,7 +99,7 @@
     </context>
 
     <context id="link" style-ref="link">
-      <match>(\%[\w+|`[^`]+`)__?\%]</match>
+      <match>(\%[[0-9a-zA-Z]+([-_.][0-9a-zA-Z]+)*|`[^`]+`)__?\%]</match>
     </context>
 
     <context id="substitution" style-ref="substitution">
