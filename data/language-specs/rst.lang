@@ -109,7 +109,7 @@
     <context id="literals">
       <include>
         <context id="inline-literals" class="no-spell-check" style-ref="code">
-          <match>``(?!\s).*(?!\s)``</match>
+          <match>``(?!\s).*?(?!\s)``</match>
         </context>
       </include>
     </context>
