@@ -115,7 +115,7 @@
     </context>
 
     <context id="url" style-ref="url">
-      <match>((http)|(file))://\S*</match>
+      <match>\%{def:net-address}</match>
     </context>
 
     <context id="rst">
