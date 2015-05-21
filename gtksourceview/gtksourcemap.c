@@ -266,7 +266,7 @@ gtk_source_map_rebuild_css (GtkSourceMap *map)
 	 * any transformations.
 	 *
 	 * If the style scheme contains a "selection" style scheme, used for
-	 * selected text, we use that with a 0.45 alpha value.
+	 * selected text, we use that with a 0.75 alpha value.
 	 *
 	 * If none of these are met, we take the background from the
 	 * #GtkStyleContext using the deprecated
@@ -348,7 +348,7 @@ gtk_source_map_rebuild_css (GtkSourceMap *map)
 		GdkRGBA color;
 
 		gdk_rgba_parse (&color, background);
-		color.alpha = 0.45;
+		color.alpha = 0.75;
 		g_free (background);
 		background = gdk_rgba_to_string (&color);
 	}
