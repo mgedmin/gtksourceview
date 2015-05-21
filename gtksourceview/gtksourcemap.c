@@ -149,13 +149,23 @@ typedef struct
 	/* The GtkSourceView we are providing a map of */
 	GtkSourceView *view;
 
+	/* A weak pointer to the connected buffer */
+	GtkTextBuffer *buffer;
+
 	/* The location of the scrubber in widget coordinate space. */
 	GdkRectangle scrubber_area;
 
+	/* Weak pointer view to child view bindings */
+	GBinding *buffer_binding;
+	GBinding *indent_width_binding;
+	GBinding *tab_width_binding;
+
 	/* Our signal handler for buffer changes */
 	gulong view_notify_buffer_handler;
+	gulong view_vadj_value_changed_handler;
+	gulong view_vadj_notify_upper_handler;
 
-	/* Our signal handler for style-scheme changes */
+	/* Signals connected indirectly to the buffer */
 	gulong buffer_notify_style_scheme_handler;
 
 	/* Denotes if we are in a grab from button press */
@@ -433,20 +443,70 @@ buffer_notify_style_scheme (GtkSourceMap  *map,
 }
 
 static void
+connect_buffer (GtkSourceMap  *map,
+                GtkTextBuffer *buffer)
+{
+	GtkSourceMapPrivate *priv;
+
+	priv = gtk_source_map_get_instance_private (map);
+
+	priv->buffer = buffer;
+	g_object_add_weak_pointer (G_OBJECT (buffer), (gpointer *)&priv->buffer);
+
+	priv->buffer_notify_style_scheme_handler =
+		g_signal_connect_object (buffer,
+			                 "notify::style-scheme",
+			                 G_CALLBACK (buffer_notify_style_scheme),
+			                 map,
+			                 G_CONNECT_SWAPPED);
+
+	buffer_notify_style_scheme (map, NULL, buffer);
+}
+
+static void
+disconnect_buffer (GtkSourceMap  *map)
+{
+	GtkSourceMapPrivate *priv;
+
+	priv = gtk_source_map_get_instance_private (map);
+
+	if (priv->buffer == NULL)
+	{
+		return;
+	}
+
+	if (priv->buffer_notify_style_scheme_handler != 0)
+	{
+		g_signal_handler_disconnect (priv->buffer,
+		                             priv->buffer_notify_style_scheme_handler);
+		priv->buffer_notify_style_scheme_handler = 0;
+	}
+
+	g_object_remove_weak_pointer (G_OBJECT (priv->buffer), (gpointer *)&priv->buffer);
+	priv->buffer = NULL;
+}
+
+static void
 view_notify_buffer (GtkSourceMap  *map,
                     GParamSpec    *pspec,
                     GtkSourceView *view)
 {
+	GtkSourceMapPrivate *priv;
 	GtkTextBuffer *buffer;
 
-	buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (view));
-	g_signal_connect_object (buffer,
-	                         "notify::style-scheme",
-	                         G_CALLBACK (buffer_notify_style_scheme),
-	                         map,
-	                         G_CONNECT_SWAPPED);
+	priv = gtk_source_map_get_instance_private (map);
 
-	buffer_notify_style_scheme (map, NULL, buffer);
+	if (priv->buffer != NULL)
+	{
+		disconnect_buffer (map);
+	}
+
+	buffer = gtk_text_view_get_buffer (GTK_TEXT_VIEW (view));
+
+	if (buffer != NULL)
+	{
+		connect_buffer (map, buffer);
+	}
 }
 
 static void
@@ -738,6 +798,135 @@ child_view_scroll_event (GtkSourceMap   *map,
 }
 
 static void
+connect_view (GtkSourceMap  *map,
+              GtkSourceView *view)
+{
+	GtkSourceMapPrivate *priv;
+	GtkAdjustment *vadj;
+
+	priv = gtk_source_map_get_instance_private (map);
+
+	priv->view = view;
+	g_object_add_weak_pointer (G_OBJECT (view), (gpointer *)&priv->view);
+
+	vadj = gtk_scrollable_get_vadjustment (GTK_SCROLLABLE (view));
+
+	priv->buffer_binding =
+		g_object_bind_property (view, "buffer",
+		                        priv->child_view, "buffer",
+		                        G_BINDING_SYNC_CREATE);
+	g_object_add_weak_pointer (G_OBJECT (priv->buffer_binding),
+	                           (gpointer *)&priv->buffer_binding);
+
+	priv->indent_width_binding =
+		g_object_bind_property (view, "indent-width",
+		                        priv->child_view, "indent-width",
+		                        G_BINDING_SYNC_CREATE);
+	g_object_add_weak_pointer (G_OBJECT (priv->indent_width_binding),
+	                           (gpointer *)&priv->indent_width_binding);
+
+	priv->tab_width_binding =
+		g_object_bind_property (view, "tab-width",
+		                        priv->child_view, "tab-width",
+		                        G_BINDING_SYNC_CREATE);
+	g_object_add_weak_pointer (G_OBJECT (priv->tab_width_binding),
+	                           (gpointer *)&priv->tab_width_binding);
+
+	priv->view_notify_buffer_handler =
+		g_signal_connect_object (view,
+		                         "notify::buffer",
+		                         G_CALLBACK (view_notify_buffer),
+		                         map,
+		                         G_CONNECT_SWAPPED);
+	view_notify_buffer (map, NULL, view);
+
+	priv->view_vadj_value_changed_handler =
+		g_signal_connect_object (vadj,
+		                         "value-changed",
+		                         G_CALLBACK (view_vadj_value_changed),
+		                         map,
+		                         G_CONNECT_SWAPPED);
+
+	priv->view_vadj_notify_upper_handler =
+		g_signal_connect_object (vadj,
+		                         "notify::upper",
+		                         G_CALLBACK (view_vadj_notify_upper),
+		                         map,
+		                         G_CONNECT_SWAPPED);
+
+	if ((gtk_widget_get_events (GTK_WIDGET (priv->view)) & GDK_ENTER_NOTIFY_MASK) == 0)
+	{
+		gtk_widget_add_events (GTK_WIDGET (priv->view), GDK_ENTER_NOTIFY_MASK);
+	}
+
+	if ((gtk_widget_get_events (GTK_WIDGET (priv->view)) & GDK_LEAVE_NOTIFY_MASK) == 0)
+	{
+		gtk_widget_add_events (GTK_WIDGET (priv->view), GDK_LEAVE_NOTIFY_MASK);
+	}
+
+	gtk_source_map_rebuild_css (map);
+}
+
+static void
+disconnect_view (GtkSourceMap *map)
+{
+	GtkSourceMapPrivate *priv;
+	GtkAdjustment *vadj;
+
+	priv = gtk_source_map_get_instance_private (map);
+
+	if (priv->view == NULL)
+	{
+		return;
+	}
+
+	disconnect_buffer (map);
+
+	if (priv->buffer_binding != NULL)
+	{
+		g_object_remove_weak_pointer (G_OBJECT (priv->buffer_binding),
+		                              (gpointer *)&priv->buffer_binding);
+		g_binding_unbind (priv->buffer_binding);
+		priv->buffer_binding = NULL;
+	}
+
+	if (priv->indent_width_binding != NULL)
+	{
+		g_object_remove_weak_pointer (G_OBJECT (priv->indent_width_binding),
+		                              (gpointer *)&priv->indent_width_binding);
+		g_binding_unbind (priv->indent_width_binding);
+		priv->indent_width_binding = NULL;
+	}
+
+	if (priv->tab_width_binding != NULL)
+	{
+		g_object_remove_weak_pointer (G_OBJECT (priv->tab_width_binding),
+		                              (gpointer *)&priv->tab_width_binding);
+		g_binding_unbind (priv->tab_width_binding);
+		priv->tab_width_binding = NULL;
+	}
+
+	if (priv->view_notify_buffer_handler != 0)
+	{
+		g_signal_handler_disconnect (priv->view, priv->view_notify_buffer_handler);
+		priv->view_notify_buffer_handler = 0;
+	}
+
+	vadj = gtk_scrollable_get_vadjustment (GTK_SCROLLABLE (priv->view));
+	if (vadj != NULL)
+	{
+		g_signal_handler_disconnect (vadj, priv->view_vadj_value_changed_handler);
+		priv->view_vadj_value_changed_handler = 0;
+
+		g_signal_handler_disconnect (vadj, priv->view_vadj_notify_upper_handler);
+		priv->view_vadj_notify_upper_handler = 0;
+	}
+
+	g_object_remove_weak_pointer (G_OBJECT (priv->view), (gpointer *)&priv->view);
+	priv->view = NULL;
+}
+
+static void
 gtk_source_map_destroy (GtkWidget *widget)
 {
 	GtkSourceMap *map = GTK_SOURCE_MAP (widget);
@@ -745,15 +934,11 @@ gtk_source_map_destroy (GtkWidget *widget)
 
 	priv = gtk_source_map_get_instance_private (map);
 
+	disconnect_buffer (map);
+	disconnect_view (map);
+
 	g_clear_object (&priv->css_provider);
 	g_clear_pointer (&priv->font_desc, pango_font_description_free);
-
-	if (priv->view != NULL)
-	{
-		g_object_remove_weak_pointer (G_OBJECT (priv->view),
-		                              (gpointer *)&priv->view);
-		priv->view = NULL;
-	}
 
 	GTK_WIDGET_CLASS (gtk_source_map_parent_class)->destroy (widget);
 }
@@ -987,58 +1172,12 @@ gtk_source_map_set_view (GtkSourceMap  *map,
 
 	if (priv->view != NULL)
 	{
-		g_object_remove_weak_pointer (G_OBJECT (priv->view), (gpointer *)&priv->view);
+		disconnect_view (map);
 	}
 
-	priv->view = view;
 	if (view != NULL)
 	{
-		GtkAdjustment *vadj;
-
-		g_object_add_weak_pointer (G_OBJECT (view), (gpointer *)&priv->view);
-
-		g_object_bind_property (priv->view, "buffer",
-		                        priv->child_view, "buffer",
-		                        G_BINDING_SYNC_CREATE);
-		g_object_bind_property (priv->view, "indent-width",
-		                        priv->child_view, "indent-width",
-		                        G_BINDING_SYNC_CREATE);
-		g_object_bind_property (priv->view, "tab-width",
-		                        priv->child_view, "tab-width",
-		                        G_BINDING_SYNC_CREATE);
-
-		g_signal_connect_object (view,
-		                         "notify::buffer",
-		                         G_CALLBACK (view_notify_buffer),
-		                         map,
-		                         G_CONNECT_SWAPPED);
-
-		view_notify_buffer (map, NULL, view);
-
-		vadj = gtk_scrollable_get_vadjustment (GTK_SCROLLABLE (priv->view));
-
-		g_signal_connect_object (vadj,
-		                         "value-changed",
-		                         G_CALLBACK (view_vadj_value_changed),
-		                         map,
-		                         G_CONNECT_SWAPPED);
-		g_signal_connect_object (vadj,
-		                         "notify::upper",
-		                         G_CALLBACK (view_vadj_notify_upper),
-		                         map,
-		                         G_CONNECT_SWAPPED);
-
-		if ((gtk_widget_get_events (GTK_WIDGET (priv->view)) & GDK_ENTER_NOTIFY_MASK) == 0)
-		{
-			gtk_widget_add_events (GTK_WIDGET (priv->view), GDK_ENTER_NOTIFY_MASK);
-		}
-
-		if ((gtk_widget_get_events (GTK_WIDGET (priv->view)) & GDK_LEAVE_NOTIFY_MASK) == 0)
-		{
-			gtk_widget_add_events (GTK_WIDGET (priv->view), GDK_LEAVE_NOTIFY_MASK);
-		}
-
-		gtk_source_map_rebuild_css (map);
+		connect_view (map, view);
 	}
 
 	g_object_notify_by_pspec (G_OBJECT (map), pspecs[PROP_VIEW]);
