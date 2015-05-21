@@ -99,7 +99,7 @@
     </context>
 
     <context id="link" style-ref="link">
-      <match>\S+__?|(`\b.+?\b`)__?</match>
+      <match>(\%[\w+|`[^`]+`)__?\%]</match>
     </context>
 
     <context id="substitution" style-ref="substitution">
