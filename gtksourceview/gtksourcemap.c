@@ -183,6 +183,7 @@ update_scrubber_position (GtkSourceMap *map)
 	GdkRectangle iter_area;
         GdkRectangle scrubber_area;
 	GtkAllocation alloc;
+	GtkAllocation view_alloc;
 	gint child_height;
 	gint view_height;
         gint y;
@@ -194,6 +195,7 @@ update_scrubber_position (GtkSourceMap *map)
 		return;
 	}
 
+	gtk_widget_get_allocation (GTK_WIDGET (priv->view), &view_alloc);
 	gtk_widget_get_allocation (GTK_WIDGET (map), &alloc);
 
 	gtk_widget_get_preferred_height (GTK_WIDGET (priv->view), NULL, &view_height);
@@ -211,7 +213,7 @@ update_scrubber_position (GtkSourceMap *map)
 	scrubber_area.x = 0;
 	scrubber_area.width = alloc.width;
 	scrubber_area.y = y;
-	scrubber_area.height = (alloc.height / (gdouble)view_height) * child_height;
+	scrubber_area.height = (gdouble)view_alloc.height / (gdouble)view_height * (gdouble)child_height;
 
 	if (memcmp (&scrubber_area, &priv->scrubber_area, sizeof scrubber_area) != 0)
 	{
@@ -985,8 +987,7 @@ gtk_source_map_set_view (GtkSourceMap  *map,
 
 	if (priv->view != NULL)
 	{
-		g_object_remove_weak_pointer (G_OBJECT (priv->view),
-		                              (gpointer *)&priv->view);
+		g_object_remove_weak_pointer (G_OBJECT (priv->view), (gpointer *)&priv->view);
 	}
 
 	priv->view = view;
@@ -994,10 +995,7 @@ gtk_source_map_set_view (GtkSourceMap  *map,
 	{
 		GtkAdjustment *vadj;
 
-g_print ("Adding bindings and signals.\n");
-
-		g_object_add_weak_pointer (G_OBJECT (view),
-		                           (gpointer *)&priv->view);
+		g_object_add_weak_pointer (G_OBJECT (view), (gpointer *)&priv->view);
 
 		g_object_bind_property (priv->view, "buffer",
 		                        priv->child_view, "buffer",
@@ -1032,14 +1030,12 @@ g_print ("Adding bindings and signals.\n");
 
 		if ((gtk_widget_get_events (GTK_WIDGET (priv->view)) & GDK_ENTER_NOTIFY_MASK) == 0)
 		{
-			gtk_widget_add_events (GTK_WIDGET (priv->view),
-			                       GDK_ENTER_NOTIFY_MASK);
+			gtk_widget_add_events (GTK_WIDGET (priv->view), GDK_ENTER_NOTIFY_MASK);
 		}
 
 		if ((gtk_widget_get_events (GTK_WIDGET (priv->view)) & GDK_LEAVE_NOTIFY_MASK) == 0)
 		{
-			gtk_widget_add_events (GTK_WIDGET (priv->view),
-			                       GDK_LEAVE_NOTIFY_MASK);
+			gtk_widget_add_events (GTK_WIDGET (priv->view), GDK_LEAVE_NOTIFY_MASK);
 		}
 
 		gtk_source_map_rebuild_css (map);
