@@ -131,9 +131,9 @@
         <context ref="field"/>
         <context ref="strong-emphasis"/>
         <context ref="emphasis"/>
-        <context ref="link"/>
         <context ref="substitution"/>
         <context ref="literals"/>
+        <context ref="link"/>
         <context ref="url"/>
       </include>
     </context>
